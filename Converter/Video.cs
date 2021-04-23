@@ -59,7 +59,7 @@ namespace Converter {
 			sw.Start();
 			Console.WriteLine("Start video encode with " + THREADS + " threads!");
 
-			files = Directory.GetFiles(@"A:\badapple\img");
+			files = Directory.GetFiles(@"delta\img");
 			Thread[] threads = new Thread[THREADS * 4];
 			saves = new byte[][][] { new byte[files.Length][], new byte[files.Length][], new byte[files.Length][], };
 			plane = new Tile[files.Length][];
@@ -74,10 +74,10 @@ namespace Converter {
 			saveBig();
 			//	Run(threads, THREADS, (string i, int off) => comp(int.Parse(i), off));
 
-			File.WriteAllText(@"G:\RESEARCH\bad apple\delta\files.mac", "files = " + realframes +"\nrealfiles = "+ files.Length +"\nhres = "+ W);
+			File.WriteAllText(@"delta\files.mac", "files = " + realframes +"\nrealfiles = "+ files.Length +"\nhres = "+ W);
 
 			Console.WriteLine("build the ROM");
-			cmp("\"G:\\RESEARCH\\bad apple\\build.bat\"", new string[] { });
+			cmp("\"build.bat\"", new string[] { });
 			sw.Stop();
 			Console.WriteLine("done in "+ (sw.ElapsedMilliseconds / 1000f) +"s");
 			Console.ReadKey();
@@ -359,7 +359,7 @@ namespace Converter {
 
 		static void cmp(string prg, string[] args) {
 			try {
-				Process.Start(new ProcessStartInfo(prg, string.Join(" ", args)) { CreateNoWindow = true, UseShellExecute = false, WorkingDirectory = "G:\\RESEARCH\\bad apple" }).WaitForExit();
+				Process.Start(new ProcessStartInfo(prg, string.Join(" ", args)) { CreateNoWindow = true, UseShellExecute = false }).WaitForExit();
 			} catch(Exception e) {
 				Console.WriteLine(e.Message);
 			}
@@ -505,7 +505,7 @@ namespace Converter {
 			// generate bytes
 			List<byte> bytes = new List<byte>(4096);
 
-			string fn = @"G:\RESEARCH\bad apple\delta\list.dat";
+			string fn = @"delta\list.dat";
 			if (File.Exists(fn)) File.Delete(fn);
 
 			for (int i = 0; i < realframes; i++) {
@@ -541,7 +541,7 @@ namespace Converter {
 			// generate bytes
 			bytes = new List<byte>(256);
 
-			fn = @"G:\RESEARCH\bad apple\delta\pal.dat";
+			fn = @"delta\pal.dat";
 			if (File.Exists(fn)) File.Delete(fn);
 
 			// some code here to make PAL work
@@ -603,10 +603,10 @@ namespace Converter {
 		static void saveBig() {
 			Stopwatch sw = new Stopwatch();
 			sw.Restart();
-			string fn1 = @"G:\RESEARCH\bad apple\delta\data.dat";
+			string fn1 = @"delta\data.dat";
 			if (File.Exists(fn1)) File.Delete(fn1);
 
-			string fn2 = @"G:\RESEARCH\bad apple\delta\pointers.dat";
+			string fn2 = @"delta\pointers.dat";
 			if (File.Exists(fn2)) File.Delete(fn2);
 
 			List<byte> f2dat = new List<byte>(1024);

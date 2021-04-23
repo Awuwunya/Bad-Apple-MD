@@ -72,7 +72,7 @@ namespace Converter {
 		static void Main(string[] args) {
 			Stopwatch sw = new Stopwatch();
 			sw.Start();
-			string[] files = Directory.GetFiles(@"G:\RESEARCH\bad apple\lyrics\png");
+			string[] files = Directory.GetFiles(@"lyrics\png");
 			int maxtile = 0;
 
 			foreach(string png in files) {
@@ -158,7 +158,7 @@ namespace Converter {
 				fname = fname.Substring(0, fname.IndexOf(" "));
 
 				// save tiles
-				string fn = @"G:\RESEARCH\bad apple\lyrics\data\"+ fname +" tiles.dat";
+				string fn = @"lyrics\data\"+ fname +" tiles.dat";
 				if (File.Exists(fn)) File.Delete(fn);
 
 				using (var f = File.OpenWrite(fn)) {
@@ -172,7 +172,7 @@ namespace Converter {
 				}
 
 				// save sprites
-				fn = @"G:\RESEARCH\bad apple\lyrics\data\" + fname + " sprites.dat";
+				fn = @"lyrics\data\" + fname + " sprites.dat";
 				if (File.Exists(fn)) File.Delete(fn);
 
 				int _vram = vram;
@@ -191,7 +191,7 @@ namespace Converter {
 				}
 
 				// save sprites 2
-				fn = @"G:\RESEARCH\bad apple\lyrics\data\" + fname + " sprites2.dat";
+				fn = @"lyrics\data\" + fname + " sprites2.dat";
 				if (File.Exists(fn)) File.Delete(fn);
 
 				int _l = 320, _r = 0;
