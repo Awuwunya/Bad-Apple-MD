@@ -1,0 +1,196 @@
+; ffmpeg -i "Bad Apple hd.mp4" -i "palette.png" -y -lavfi scale=320:224:flags=full_chroma_inp+lanczos,paletteuse=dither=floyd_steinberg -c:v libx264 -x264-params crf=0 -pix_fmt yuv444p "‪Bad Apple md.mp4"
+; ffmpeg -i "Bad Apple md.mp4" -vf fps=60 img/%5d.png
+
+; ==============================================================
+; --------------------------------------------------------------
+; VRAM map
+; --------------------------------------------------------------
+
+vTiles =		$0000
+vPlaneA =		$E000
+vPlaneB =		$E000
+vWindow =		$F000
+vHscroll =		$F000
+vSprites =		$F800
+; ==============================================================
+; --------------------------------------------------------------
+; misc equ
+; --------------------------------------------------------------
+
+HW_Version =		$A10001					; Mega Drive version register
+HW_TMSS =		$A14000					; TMSS address
+; ==============================================================
+; --------------------------------------------------------------
+; VDP equ
+; --------------------------------------------------------------
+
+VDP_Data =		$C00000					; VDP data port
+VDP_Control =		$C00004					; VDP control port
+VDP_Counter =		$C00008					; VDP H/V counter port
+VDP_PSG =		$C00011					; PSG command port
+VDP_BANK =		$20000					; size of a single DMA bank
+; ==============================================================
+; --------------------------------------------------------------
+; PAD equ
+; --------------------------------------------------------------
+
+PAD_Data1 =		$A10003					; PAD 1 data
+PAD_Data2 =		$A10005					; PAD 2 data
+PAD_DataX =		$A10007					; PAD Ex data
+PAD_Control1 =		$A10009					; PAD 1 control
+PAD_Control2 =		$A1000B					; PAD 2 control
+PAD_ControlX =		$A1000D					; PAD Ex control
+
+PAD_TH =		6					; TH pin bit
+PAD_TR =		5					; TR pin bit
+PAD_TL =		4					; TL pin bit
+; ==============================================================
+; --------------------------------------------------------------
+; Z80 equ
+; --------------------------------------------------------------
+
+YM_Reg1 =		$A04000					; YM2612 register port 1
+YM_Data1 =		$A04001					; YM2612 data port 1
+YM_Reg2 =		$A04002					; YM2612 register port 2
+YM_Data2 =		$A04003					; YM2612 data port 2
+
+Z80_Bus =		$A11100					; Z80 bus request
+Z80_Reset =		$A11200					; Z80 reset
+Z80_RAM =		$A00000					; start of Z80 RAM
+Z80_EndRAM =		$A02000					; end of Z80 RAM
+
+stopZ80		macro
+		move.w	#$100,Z80_Bus
+.loop\@		btst	#0,Z80_Bus
+		bne.s	.loop\@
+	endm
+
+startZ80	macro
+		move.w	#0,Z80_Bus
+	endm
+; ==============================================================
+; --------------------------------------------------------------
+; RAM equ
+; --------------------------------------------------------------
+
+	rsset $FFFF8000
+stack		rs.w 0						; stack ptr
+frame		rs.w 1						; frames left
+int		rs.w 1						; keeps track of lag
+zcheck		rs.b 1						; whether to check z80 or not
+palflag		rs.b 1						; if nonzero, this is a PAL console
+
+lyricsplace	rs.w 1						; the current placement of lyrics. 4, 8 or 12
+lyricsdelay	rs.w 1						; delay til next lyrics
+lyricsa		rs.b 0						; set if A is being held
+lyricsaddr	rs.l 1						; current lyrics address
+
+pskipbits	rs.b 0						; the number of bits left to read for this byte
+pskipaddr	rs.l 1						; the source address for the PAL skip data
+pskipbyte	rs.b 1						; the current byte to read
+; ==============================================================
+; --------------------------------------------------------------
+; mapper equ
+; --------------------------------------------------------------
+
+mapper1 =		$A130F3
+mapper2 =		$A130F5
+mapper3 =		$A130F7
+mapper4 =		$A130F9
+mapper5 =		$A130FB
+mapper6 =		$A130FD
+mapper7 =		$A130FF
+; ==============================================================
+; --------------------------------------------------------------
+; Align to next divisible offset
+; --------------------------------------------------------------
+
+align			macro alignment
+		cnop 0,\alignment
+	endm
+; ==============================================================
+; --------------------------------------------------------------
+; VDP command generator
+;
+;   ins =	instruction to use for this vdp write
+;   addr =	destination VRAM/CRAM/VSRAM address
+;   type =	destination type: VRAM, CRAM or VSRAM
+;   rwd =	operation type: READ, WRITE or DMA
+;
+; if no end & end2 >
+;   end =	not used (for example if you want to use with dc.l)
+;   end2 =	not used
+;
+; if no end2 >
+;   end =	the destination for command data (not required, for example for dc.l)
+;   end2 =	not used
+;
+; if end2 >
+;   end =	can be used to modify the generated value (such as shift)
+;   end2 =	the destination for command data
+; --------------------------------------------------------------
+
+vdp			macro ins, addr, type, rwd, end, end2
+	if narg=5
+		\ins #(((\type&\rwd)&3) << 30) | (((\addr)&$3FFF) << 16) | (((\type&\rwd)&$FC) << 2) | (((\addr)&$C000) >> 14), \end
+
+	elseif narg=6
+		\ins #(((\type&\rwd)&3) << 30) | (((\addr)&$3FFF) << 16) | (((\type&\rwd)&$FC) << 2) | (((\addr)&$C000) >> 14)\end, \end2
+
+	else
+		\ins (((\type&\rwd)&3) << 30) | (((\addr)&$3FFF) << 16) | (((\type&\rwd)&$FC) << 2) | (((\addr)&$C000) >> 14)
+	endif
+	endm
+; ==============================================================
+; --------------------------------------------------------------
+; VDP command argument types
+; --------------------------------------------------------------
+
+; values for the "type" argument
+VRAM =			$21					; VRAM OP
+CRAM =			$2B					; CRAM OP
+VSRAM =			$25					; VSRAM OP
+
+; values for the "rwd" argument
+READ =			$0C					; VDP READ
+WRITE =			$07					; VDP WRITE
+WDMA =			$27					; VDP DMA
+; ==============================================================
+; --------------------------------------------------------------
+; VDP command to DMA stuff from ROM/RAM to VDP
+;
+;   source =	the 68000 data to start DMA from
+;   dest =	destination address in VRAM
+;   length =	length of the DMA
+;   type =	destination type: VRAM, CRAM or VSRAM
+; --------------------------------------------------------------
+
+dma			macro source, dest, length, type
+		move.l	#$94009300|((((\length)>>1)&$FF00)<<8)|(((\length)>>1)&$FF),(a6)
+		move.l	#$96009500|((((\source)>>1)&$FF00)<<8)|(((\source)>>1)&$FF),(a6)
+		move.w	#$9700|(((\source)>>17)&$7F),(a6)
+	vdp	move.l,\dest,\type,WDMA,(a6)			; start a DMA
+	endm
+; ==============================================================
+; --------------------------------------------------------------
+; VDP command to fill VRAM with a specific word
+;
+;   fill =	the word to fill VRAM with
+;   dest =	destination address in VRAM
+;   length =	length of the DMA
+;   wait =	if 1, the code waits until DMA ends
+; --------------------------------------------------------------
+
+vdpfill		macro fill, dest, length, wait
+		move.l	#$8F019400|((((\length)-1)&$FF00)>>8),(a6)
+		move.l	#$97809300|(((\length)-1)&$FF),(a6)
+	vdp	move.l,\dest,VRAM,WDMA,(a6)			; start a fill
+		move.w	#\fill,-4(a6)				; fill with this
+
+	if \wait
+.wait\@
+		move	(a6),ccr				; check if DMA is taking place
+		bvs.s	.wait\@					; if yes, branch
+		move.w	#$8F02,(a6)				; restore the autoincrement
+	endif
+	endm
