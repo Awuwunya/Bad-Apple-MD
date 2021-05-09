@@ -8,6 +8,7 @@
 		opt os+						; optimize short branches
 		opt oz+						; optimize zero displacement
 
+test_vgm =	0
 		include "delta/files.mac"			; number of files in reality
 		include "equ.mac"				; other equates
 		nolist
@@ -58,7 +59,7 @@ EndOfROM:	dc.l -1
 		dc.l $20202020, $20202020, $20202020
 		dc.l 0
 		dc.l 0
-		dc.b '                                            '
+		dc.b 'CONFIRMED TO WORK ON BLASTEM AND REAL HW    '
 		dc.b 'JUE             '
 ; ==============================================================
 ; --------------------------------------------------------------
@@ -82,7 +83,6 @@ exMisc:		stop	#$2F00
 ; --------------------------------------------------------------
 
 Vint:
-		addq.w	#1,int.w				; add to lag ctr
 		addq.b	#1,zcheck.w				; add to zcheck counter
 Hint:
 		rte
@@ -106,7 +106,7 @@ InitData:
 	z80prog 0
 		di						; no interrupts 4 u
 		im	1					; but make sure to use im 1!
-		ld	de,$4001				; load YM register to de
+		ld	de,$4000				; load YM register to de
 
 .reg		macro r,v
 		ld	a,\r					; send register
@@ -290,9 +290,9 @@ Init:
 		move	#$2F00,sr				; disable interrupts
 		move.l	hVDP_Control.w,a6			; load VDP control port to a6
 
-		tst.l	PAD_Control1-1				; test port A and B control
+	;	tst.l	PAD_Control1-1				; test port A and B control
 	;	bne.s	.aok					; if enabled, branch
-		tst.w	PAD_ControlX-1				; test port C control
+	;	tst.w	PAD_ControlX-1				; test port C control
 
 .aok
 	;	bne.w	SoftInit				; if enabled, branch
@@ -379,37 +379,6 @@ Init:
 ; --------------------------------------------------------------
 
 SoftInit:
-;		moveq	#0,d0					; clear d0-d7
-;		move.l	d0,d1
-;		move.l	d1,d2
-;		move.l	d2,d3
-;		move.l	d3,d4
-;		move.l	d4,d5
-;		move.l	d5,d6
-;		move.l	d6,d7
-;		move.l	d7,a0					; clear a0-a5
-;		move.l	a0,a1
-;		move.l	a1,a2
-;		move.l	a2,a3
-;		move.l	a3,a4
-;		move.l	a4,a5
-;		move.l	a5,usp					; clear usp
-; --------------------------------------------------------------
-
-	; clear entire RAM (in $100 byte blocks)
-;		lea	0.w,sp					; load end of RAM to sp
-
-.clearloop
-;		movem.l	d0-a5,-(sp)				; clear 56 ($38) bytes of RAM
-;		movem.l	d0-a5,-(sp)				; clear 56 ($38) bytes of RAM
-;		movem.l	d0-a5,-(sp)				; clear 56 ($38) bytes of RAM
-;		movem.l	d0-a5,-(sp)				; clear 56 ($38) bytes of RAM
-;		movem.l	d0-d7,-(sp)				; clear 32 ($20) bytes of RAM
-
-;		cmp.l	#$FFFF0000,sp				; check if past end of RAM
-;		bhi.s	.clearloop				; if not, go back to loop
-; --------------------------------------------------------------
-
 	; reset vdp
 		movem.l	hVDP_Data.w,a5-a6			; load VDP control port to a6 and data port to a5
 		lea	Stack.w,sp				; reset stack pointer
@@ -475,6 +444,10 @@ SoftInit:
 		move.b	#(Audio / $80000) + 1,mapper3		; prepare mapper3
 		stop	#$2300					; wait for the next frame
 
+	if test_vgm
+		jmp	PlayVGM
+	endif
+
 	stopz80							; stop z80
 		clr.b	Z80_RAM+3				; enable playback
 	startz80						; start z80
@@ -533,7 +506,6 @@ METHOD =	0
 	startz80						; start z80
 
 .nochk
-		subq.w	#1,int.w				; sub from lag ctr
 		stop	#$2300					; wait for the next frame
 ; --------------------------------------------------------------
 
@@ -617,10 +589,7 @@ METHOD =	0
 
 		subq.w	#1,frame.w				; check if more frames to render
 		bne.s	.rts					; if yes, branch
-
-		move	#$2700,sr				; do not cause v-ints
-		sub.w	#realfiles-files,int.w			; fix frames count (debug)
-		bra.w	*					; halt software
+		jmp	PlayVGM
 
 .rts
 		rts
@@ -852,9 +821,434 @@ Palmap:		incbin "delta/pal.dat"
 List:		incbin "delta/list.dat"
 PtrList:	incbin "delta/pointers.dat"
 
+		align $10			; wevy wevy impowowtant
+		dc.b "                "
+		dc.b " Look! We even  "
+		dc.b " have some free "
+		dc.b " space here! We "
+		dc.b " have a lot of  "
+		dc.b "  free space!   "
+		dc.b "                "
+		dc.b " Wonder what we "
+		dc.b " should do with "
+		dc.b "  it, hmmm?! I  "
+		dc.b "know, lets have "
+		dc.b "a little credits"
+		dc.b "    section:    "
+		dc.b "                "
+		dc.b "created by:     "
+		dc.b "   AURORA FIELDS"
+		dc.b "                "
+		dc.b "hardware testing"
+		dc.b " & help:        "
+		dc.b "          Jorge "
+		dc.b "                "
+		dc.b "song & ideas:   "
+		dc.b "     Nat The    "
+		dc.b "       Porcupine"
+		dc.b "                "
+		dc.b "other testing:  "
+		dc.b "    Vladikcomper"
+		dc.b "        Soldaten"
+		dc.b "           Selbi"
+		dc.b "                "
+		dc.b "in association w"
+		dc.b "  Mega Drive    "
+		dc.b "    Developers  "
+		dc.b "      Collective"
+		dc.b "                "
+		dc.b "join our Discord"
+		dc.b "   @ dc.mddc.dev"
+		dc.b "                "
+		dc.b "  we are also   "
+		dc.b "going to launch "
+		dc.b "forums@ mddc.dev"
+		dc.b "                "
+		dc.b "talking about MD"
+		dc.b " and other SEGA "
+		dc.b "  software and  "
+		dc.b " hardware! Also "
+		dc.b "about research, "
+		dc.b "homebrew, hacks,"
+		dc.b " and other cool "
+		dc.b " ideas we have! "
+		dc.b "                "
+		dc.b "   thanks for   "
+		dc.b "  enjoying the  "
+		dc.b " demo, hope you "
+		dc.b "were impressed. "
+		dc.b "                "
+		dc.b "  yes, this is  "
+		dc.b "320x224, at 60hz"
+		dc.b "most of the time"
+		dc.b "                "
+		dc.b "sometimes there "
+		dc.b "  are skipped   "
+		dc.b " frames because "
+		dc.b "  this was too  "
+		dc.b "  difficult to  "
+		dc.b " optimize more! "
+		dc.b "                "
+		dc.b " the video only "
+		dc.b "   uses delta   "
+		dc.b "encoding to run "
+		dc.b " the video with "
+		dc.b "  VRAM writes.  "
+		dc.b "                "
+		dc.b " this makes DMA "
+		dc.b "  impractical.  "
+		dc.b "                "
+		dc.b " so yes all of  "
+		dc.b "this can be done"
+		dc.b "without any DMA."
+		dc.b "                "
+		dc.b "  This project  "
+		dc.b "  took about a  "
+		dc.b "week to do, but "
+		dc.b " was one of the "
+		dc.b " most difficult "
+		dc.b "things I've ever"
+		dc.b "done on the MD! "
+		dc.b "                "
+		dc.b " See the source "
+		dc.b "   code on my   "
+		dc.b "  Github page:  "
+		dc.b "     github.com/"
+		dc.b "NatsumiFox/Bad-Apple-MD         "
+		even
+; ==============================================================
+; --------------------------------------------------------------
+; play teh VGM filee
+;
+; edit: Does not work, abandoning this idea
+; --------------------------------------------------------------
 
-	align	$80000
+LittleEndianSucksW	macro dst, offs
+	if narg=2
+		move.w	\offs(a0),\dst				; load word into dst
+		ror.w	#8,\dst					; swap bytes
+
+	else
+		move.b	(a0)+,(sp)				; load the next byte into stack
+		move.b	(a0)+,\dst				; load byte value into dst
+		lsl.w	#8,\dst					; shift into place
+		move.b	(sp),\dst				; get the previous byte back to dst
+	endif
+	endm
+; --------------------------------------------------------------
+
+LittleEndianSucks	macro dst, offs
+	if '\0' = 'l'
+		if narg=2
+			move.l	\offs(a0),\dst			; load longword to dst
+			ror.w	#8,\dst				; swap 2 lower bytes
+			swap	\dst				; swap words
+			ror.w	#8,\dst				; swap 2 lower bytes
+
+		else
+			LittleEndianSucksW	\dst		; read a word of little endian bs
+			swap	\dst				; swap words
+			LittleEndianSucksW	\dst		; read a word of little endian bs
+			swap	\dst				; swap words again
+		endif
+	else
+		LittleEndianSucksW	\_			; read a word of little endian bs
+	endif
+	endm
+
+LittleEndianSucksVar	macro *, value
+\* set			(\value >> 24)|(\value << 24)|(\value >> 8)|(\value << 8)
+	endm
+; --------------------------------------------------------------
+
+YM1		macro reg, val
+		move.b	#\reg,(a4)				; send command to port1
+		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; waste 8 cycles! yay!
+		move.b	#\val,1(a4)				; send value to port1
+	endm
+; --------------------------------------------------------------
+
+TimerA		macro
+		btst	#0,(a4)					; check if Timer A has overflowed
+		beq.s	.skip\@					; if not, wait some more
+
+	YM1	$27, $15					; enable Timer A
+		add.b	#$1E,d7					; increment d7
+		bcs.s	.skip\@					; if overflow, skip
+		addq.w	#1,d6					; increment timer counter
+
+		bchg	#31,d5					; flip the 31st bit of length
+		beq.s	.skip\@					; if the bit was set, do not play sample
+
+		move.b	#$2A,(a4)				; send DAC command to port1
+		subq.w	#1,d5					; decrease sample index
+		bne.s	.noreset\@				; branch if more sample to play
+
+		move.w	#$1000,d5				; reset sample lenght
+		lea	VGM_NullPCM(pc),a1			; reset sample address
+
+.noreset\@
+		move.b	(a1)+,1(a4)				; send value to port1
+
+.skip\@
+	endm
+; --------------------------------------------------------------
+
+;EXPECTED_PSG_FREQUENCY	LittleEndianSucksVar	3579545		; this is the right PSG freq
+;EXPECTED_FM_FREQUENCY	LittleEndianSucksVar	7670454		; this is the right FM freq
+
+PlayVGM:
+		stopZ80
+		move	#$2700,sr				; disable ints
+; --------------------------------------------------------------
+
+		addq.w	#2,sp					; make space for byte->word hack
+		clr.w	(sp)					; clear the input
+		lea	VGM,a0					; load VGM source file to a0
+		move.w	8(a0),d7				; load VGM version (for example $5001, $7001, etc.)
+; --------------------------------------------------------------
+
+	; read the file
+		tst.l	$C(a0)					; check if PSG frequency is valid
+		sne	vgmpsg.w				; if so, enable PSG
+		tst.l	$2C(a0)					; check if FM frequency is valid
+		sne	vgmfm.w					; if so, enable FM
+; --------------------------------------------------------------
+
+	; load start location
+		LittleEndianSucks.l	d0, $34			; load the sucky little endian number
+
+		cmp.w	#$5001,d7				; check VGM version
+		bhs.s	.normal					; branch if >=1.50
+		moveq	#$40-$34,d0				; load the default offset
+
+.normal
+		lea	$34(a0,d0.l),a1				; load VGM data to a1 (leave header to a0)
+; --------------------------------------------------------------
+
+	; load loop location
+		LittleEndianSucks.l	d0, $1C			; load the sucky little endian number
+		lea	$1C(a0,d0.l),a2				; load VGM loop address a2
+		move.l	a2,vgmloop.w				; save loop point
+; --------------------------------------------------------------
+
+	; init
+		exg	a0,a1					; swap so a1 is header
+		move.l	a0,a2					; pretend data bank is at start
+
+		lea	YM_Reg1,a4				; load YM port 1 to a4
+		lea	YM_Reg2,a5				; load YM port 2 to a5
+		lea	VDP_PSG,a6				; load PSG port to a6
+
+		move.w	#blocks,blockaddr.w			; reset block address
+		move.w	#735,vgmwaitA.w				; wait states for 60hz
+		move.w	#882,vgmwaitB.w				; wait states for 50hz
+
+		moveq	#0,d5					; reset the length of the sample
+		moveq	#0,d6					; reset the number of wait states
+		moveq	#0,d7
+
+	YM1	$24, $FF					; YM Timer A: $3FF
+		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; waste 8 cycles! yay!
+	YM1	$25, $03
+		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; waste 8 cycles! yay!
+	YM1	$27, $15					; enable Timer A
+; ==============================================================
+; --------------------------------------------------------------
+; VGM playback loop
+; --------------------------------------------------------------
+
+VGM_Play:
+		move.b	(a0)+,d0				; load the next command
+	TimerA							; accumulate TimerA
+
+		cmp.b	#$60,d0					; check if this is a $50 command
+		blo.s	.c50					; jump if yes
+		cmp.b	#$70,d0					; check if this is a $60 command
+		blo.s	.c60					; jump if yes
+		cmp.b	#$80,d0					; check if this is a wait command
+		blo.w	VGM_WaitQ				; jump if yes
+		cmp.b	#$90,d0					; check if this is a DAC command
+		blo.w	VGM_DAC					; jump if yes
+
+		cmp.b	#$95,d0					; check if this is a Start Stream Fast command
+		beq.w	VGM_SSF					; jump if yes
+		cmp.b	#$96,d0					; check for special sample bleepbloop commands
+		bhs.w	*					; UNSUPPORTED COMMAND
+; --------------------------------------------------------------
+
+		and.w	#7,d0					; remove the upper byte
+		move.b	.tab90(pc,d0.w),d0			; load the offset to d0
+		add.w	d0,a0					; skip this many bytes
+		bra.s	VGM_Play				;
+
+.tab90		dc.b 4, 4, 5, 10, 1, 4,	0, 0			; cool table
+; --------------------------------------------------------------
+
+.c50
+		cmp.b	#$4F,d0					; check if this is an invalid
+		blo.w	*					; jump if yes
+		cmp.b	#$50,d0					; check if this is a $4F or $50 command
+		bls.w	VGM_PSG					; jump if yes
+
+		cmp.b	#$52,d0					; check if this is a FM port1 command
+		beq.w	VGM_FM1					; jump if yes
+		cmp.b	#$53,d0					; check if this is a FM port2 command
+		beq.w	VGM_FM2					; jump if yes
+		bra.w	*					; UNSUPPORTED COMMAND
+; --------------------------------------------------------------
+
+.c60
+		cmp.b	#$61,d0					; check if this is a wait n command
+		beq.w	VGM_WaitN				; jump if yes
+		cmp.b	#$62,d0					; check if this is a wait a command
+		beq.w	VGM_WaitA				; jump if yes
+		cmp.b	#$63,d0					; check if this is a wait a command
+		beq.w	VGM_WaitB				; jump if yes
+
+		cmp.b	#$67,d0					; check if this is a data block command
+		beq.w	VGM_Data				; jump if yes
+		cmp.b	#$66,d0					; check if this is a stop command
+		bne.w	*					; jump if not
+
+		move.l	vgmloop.w,a0				; loop VGM
+		move.w	#blocks,blockaddr.w			; reset block address
+		bra.w	VGM_Play				;
+; ==============================================================
+; --------------------------------------------------------------
+; VMG FM write
+; --------------------------------------------------------------
+
+VGM_FM1:
+	TimerA							; accumulate TimerA
+		move.b	(a0)+,(a4)				; send command to port1
+		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; waste 8 cycles! yay!
+		move.b	(a0)+,1(a4)				; send value to port1
+		bra.w	VGM_Play				; jump back to playback code
+; --------------------------------------------------------------
+
+VGM_FM2:
+	TimerA							; accumulate TimerA
+		move.b	(a0)+,(a5)				; send command to port2
+		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; waste 8 cycles! yay!
+		move.b	(a0)+,1(a5)				; send value to port2
+		bra.w	VGM_Play				; jump back to playback code
+; ==============================================================
+; --------------------------------------------------------------
+; VGM PSG write
+; --------------------------------------------------------------
+
+VGM_PSG:
+	TimerA							; accumulate TimerA
+		move.b	(a0)+,(a6)				; send command to PSG
+		bra.w	VGM_Play				; jump back to playback code
+; ==============================================================
+; --------------------------------------------------------------
+; VGM wait states
+; --------------------------------------------------------------
+
+VGM_WaitN:
+		LittleEndianSucks.w	d0			; load timer wait states from after the command
+		bra.s	VGM_WaitCom				;
+; --------------------------------------------------------------
+
+VGM_WaitA:
+		move.w	vgmwaitA.w,d0				; load timer A wait states
+		bra.s	VGM_WaitCom				;
+; --------------------------------------------------------------
+
+VGM_WaitB:
+		move.w	vgmwaitA.w,d0				; load timer A wait states
+		bra.s	VGM_WaitCom				;
+; --------------------------------------------------------------
+
+VGM_DAC:
+	TimerA							; accumulate TimerA
+		move.b	#$2A,(a4)				; send command to port1
+		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; waste 8 cycles! yay!
+		move.b	(a2)+,1(a4)				; send value to port2
+; --------------------------------------------------------------
+
+VGM_WaitQ:
+		and.w	#$F,d0					; get states from the command
+	;	bra.s	VGM_WaitCom				;
+; --------------------------------------------------------------
+
+VGM_WaitComLoop:
+		clr.w	d6					; clear stuff
+
+VGM_WaitCom:
+	TimerA							; accumulate TimerA
+		sub.w	d6,d0					; subtract the timer stuffs
+		bpl.s	VGM_WaitComLoop				; loop til done
+
+		move.w	d0,d6					; load the remaining amount to d6
+		neg.w	d6					; negative to positive
+		bra.w	VGM_Play				; jump back to playback code
+; ==============================================================
+; --------------------------------------------------------------
+; VGM load data
+; --------------------------------------------------------------
+
+VGM_Data:
+		cmp.b	#$66,(a0)+				; check if valid data
+		bne.w	*					; if not, freeze
+
+		move.b	(a0)+,d0				; load the data type to d0
+		beq.s	VGM_DataUncPCM				; uncompressed YM2612 PCM data block
+		bra.w	*					; NOT SUPPORTED
+; --------------------------------------------------------------
+
+VGM_DataUncPCM:
+	TimerA							; accumulate TimerA
+		LittleEndianSucks.l	d0			; load the sucky little endian number
+		move.l	a0,a2					; load the new data section
+		lea	(a0,d0.l),a0				; go to the next command address
+
+		move.w	blockaddr.w,a3				; load the block address register to a3
+		move.l	d0,(a3)+				; save the block size too
+		move.l	a2,(a3)+				; save the new sample address there
+		move.w	a3,blockaddr.w				; store block address again
+		bra.w	VGM_Play				; jump back to playback code
+; --------------------------------------------------------------
+
+VGM_SSF:
+		tst.b	(a0)+					; check for stream 00
+		bne.w	*					; if not, kill
+		LittleEndianSucks.w	d0			; load the sucky little endian number
+
+	TimerA							; accumulate TimerA
+		add.w	d0,d0					;
+		add.w	d0,d0					;
+		add.w	d0,d0					; 8x value
+		add.w	#blocks,d0				; add base address to d0
+
+		move.w	d0,a1					; load it to a1
+		movem.l	(a1),d5/a1				; load sample address and size
+
+		addq.w	#1,a0					; skip the flags
+		bra.w	VGM_Play				; jump back to playback code
+; --------------------------------------------------------------
+
+VGM_NullPCM:	dcb.b	$1000,$80				; fill with $80 (neutral)
+		align	$1000
+VGM:		incbin "sound.vgm"
+		align	$80000
+; --------------------------------------------------------------
+
+	if test_vgm = 0
 		incbin "delta/data.dat"
-	align	$80000
+		align	$80000
+
 Audio:		incbin "pcm/pcm.raw"
 AudioEnd:
+	else
+Audio:
+AudioEnd:
+	endif

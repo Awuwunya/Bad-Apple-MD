@@ -88,6 +88,17 @@ lyricsaddr	rs.l 1						; current lyrics address
 pskipbits	rs.b 0						; the number of bits left to read for this byte
 pskipaddr	rs.l 1						; the source address for the PAL skip data
 pskipbyte	rs.b 1						; the current byte to read
+
+	rsset $FFFFF000
+blockaddr	rs.w 1						; the address of blocks
+blocks		rs.l 2*$08					; sample blocks
+
+	rsset $FFFFFF00
+vgmpsg		rs.b 1						; not 0 if PSG enabled
+vgmfm		rs.b 1						; not 0 if FM enabled
+vgmloop		rs.l 1						; loop position. If first byte is nonzero, no loop
+vgmwaitA	rs.w 1						; wait A timer
+vgmwaitB	rs.w 1						; wait B timer
 ; ==============================================================
 ; --------------------------------------------------------------
 ; mapper equ
