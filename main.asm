@@ -116,6 +116,8 @@ InitData:
 		ld	(de),a					;
 	endm
 
+	.reg	$27, $00					; disable timer A
+		dec	e					;
 	.reg	$42, $7F					; Set FM6 TL1 to mute
 		dec	e					;
 	.reg	$46, $7F					; Set FM6 TL2 to mute
@@ -589,7 +591,9 @@ METHOD =	0
 
 		subq.w	#1,frame.w				; check if more frames to render
 		bne.s	.rts					; if yes, branch
-		jmp	PlayVGM
+		stop	#$2300					; wait for the next frame
+		stop	#$2300					; wait for the next frame
+		jmp	PlayVGM					; go play da vgm
 
 .rts
 		rts
@@ -963,35 +967,15 @@ LittleEndianSucksVar	macro *, value
 
 YM1		macro reg, val
 		move.b	#\reg,(a4)				; send command to port1
-		or.l	d0,d0					; waste 8 cycles! yay!
-		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; waste cycles
 		move.b	#\val,1(a4)				; send value to port1
 	endm
 ; --------------------------------------------------------------
 
-TimerA		macro
-		btst	#0,(a4)					; check if Timer A has overflowed
-		beq.s	.skip\@					; if not, wait some more
-
-	YM1	$27, $15					; enable Timer A
-		add.b	#$1E,d7					; increment d7
-		bcs.s	.skip\@					; if overflow, skip
-		addq.w	#1,d6					; increment timer counter
-
-		bchg	#31,d5					; flip the 31st bit of length
-		beq.s	.skip\@					; if the bit was set, do not play sample
-
-		move.b	#$2A,(a4)				; send DAC command to port1
-		subq.w	#1,d5					; decrease sample index
-		bne.s	.noreset\@				; branch if more sample to play
-
-		move.w	#$1000,d5				; reset sample lenght
-		lea	VGM_NullPCM(pc),a1			; reset sample address
-
-.noreset\@
-		move.b	(a1)+,1(a4)				; send value to port1
-
-.skip\@
+WaitYM		macro reg, val
+.busy\@
+		tst.b	(a4)					; check if YM2612 is busy
+		bmi.s	.busy\@					; branch if yes
 	endm
 ; --------------------------------------------------------------
 
@@ -999,21 +983,11 @@ TimerA		macro
 ;EXPECTED_FM_FREQUENCY	LittleEndianSucksVar	7670454		; this is the right FM freq
 
 PlayVGM:
-		stopZ80
 		move	#$2700,sr				; disable ints
-; --------------------------------------------------------------
+		stopZ80
 
-		addq.w	#2,sp					; make space for byte->word hack
-		clr.w	(sp)					; clear the input
 		lea	VGM,a0					; load VGM source file to a0
 		move.w	8(a0),d7				; load VGM version (for example $5001, $7001, etc.)
-; --------------------------------------------------------------
-
-	; read the file
-		tst.l	$C(a0)					; check if PSG frequency is valid
-		sne	vgmpsg.w				; if so, enable PSG
-		tst.l	$2C(a0)					; check if FM frequency is valid
-		sne	vgmfm.w					; if so, enable FM
 ; --------------------------------------------------------------
 
 	; load start location
@@ -1050,11 +1024,11 @@ PlayVGM:
 		moveq	#0,d7
 
 	YM1	$24, $FF					; YM Timer A: $3FF
-		or.l	d0,d0					; waste 8 cycles! yay!
-		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; wait so we can safely check the busy flag
+	WaitYM							; wait if busy...
 	YM1	$25, $03
-		or.l	d0,d0					; waste 8 cycles! yay!
-		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; wait so we can safely check the busy flag
+	WaitYM							; wait if busy...
 	YM1	$27, $15					; enable Timer A
 ; ==============================================================
 ; --------------------------------------------------------------
@@ -1063,8 +1037,6 @@ PlayVGM:
 
 VGM_Play:
 		move.b	(a0)+,d0				; load the next command
-	TimerA							; accumulate TimerA
-
 		cmp.b	#$60,d0					; check if this is a $50 command
 		blo.s	.c50					; jump if yes
 		cmp.b	#$70,d0					; check if this is a $60 command
@@ -1076,8 +1048,8 @@ VGM_Play:
 
 		cmp.b	#$95,d0					; check if this is a Start Stream Fast command
 		beq.w	VGM_SSF					; jump if yes
-		cmp.b	#$96,d0					; check for special sample bleepbloop commands
-		bhs.w	*					; UNSUPPORTED COMMAND
+	;	cmp.b	#$96,d0					; check for special sample bleepbloop commands
+	;	bhs.w	*					; UNSUPPORTED COMMAND
 ; --------------------------------------------------------------
 
 		and.w	#7,d0					; remove the upper byte
@@ -1098,7 +1070,7 @@ VGM_Play:
 		beq.w	VGM_FM1					; jump if yes
 		cmp.b	#$53,d0					; check if this is a FM port2 command
 		beq.w	VGM_FM2					; jump if yes
-		bra.w	*					; UNSUPPORTED COMMAND
+	;	bra.w	*					; UNSUPPORTED COMMAND
 ; --------------------------------------------------------------
 
 .c60
@@ -1111,8 +1083,8 @@ VGM_Play:
 
 		cmp.b	#$67,d0					; check if this is a data block command
 		beq.w	VGM_Data				; jump if yes
-		cmp.b	#$66,d0					; check if this is a stop command
-		bne.w	*					; jump if not
+	;	cmp.b	#$66,d0					; check if this is a stop command
+	;	bne.w	*					; jump if not
 
 		move.l	vgmloop.w,a0				; loop VGM
 		move.w	#blocks,blockaddr.w			; reset block address
@@ -1123,19 +1095,17 @@ VGM_Play:
 ; --------------------------------------------------------------
 
 VGM_FM1:
-	TimerA							; accumulate TimerA
+	WaitYM
 		move.b	(a0)+,(a4)				; send command to port1
-		or.l	d0,d0					; waste 8 cycles! yay!
-		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; waste cycles
 		move.b	(a0)+,1(a4)				; send value to port1
 		bra.w	VGM_Play				; jump back to playback code
 ; --------------------------------------------------------------
 
 VGM_FM2:
-	TimerA							; accumulate TimerA
+	WaitYM
 		move.b	(a0)+,(a5)				; send command to port2
-		or.l	d0,d0					; waste 8 cycles! yay!
-		or.l	d0,d0					; waste 8 cycles! yay!
+		or.l	d0,d0					; waste cycles
 		move.b	(a0)+,1(a5)				; send value to port2
 		bra.w	VGM_Play				; jump back to playback code
 ; ==============================================================
@@ -1144,7 +1114,6 @@ VGM_FM2:
 ; --------------------------------------------------------------
 
 VGM_PSG:
-	TimerA							; accumulate TimerA
 		move.b	(a0)+,(a6)				; send command to PSG
 		bra.w	VGM_Play				; jump back to playback code
 ; ==============================================================
@@ -1168,26 +1137,51 @@ VGM_WaitB:
 ; --------------------------------------------------------------
 
 VGM_DAC:
-	TimerA							; accumulate TimerA
 		move.b	#$2A,(a4)				; send command to port1
-		or.l	d0,d0					; waste 8 cycles! yay!
-		or.l	d0,d0					; waste 8 cycles! yay!
+		and.w	#$F,d0					; get states from the command
+		or.l	d0,d0					; waste cycles
 		move.b	(a2)+,1(a4)				; send value to port2
+		bra.s	VGM_WaitCom				;
 ; --------------------------------------------------------------
 
 VGM_WaitQ:
 		and.w	#$F,d0					; get states from the command
-	;	bra.s	VGM_WaitCom				;
+		addq.w	#1,d0					; +1 beccause VGM
 ; --------------------------------------------------------------
 
-VGM_WaitComLoop:
-		clr.w	d6					; clear stuff
-
 VGM_WaitCom:
-	TimerA							; accumulate TimerA
 		sub.w	d6,d0					; subtract the timer stuffs
-		bpl.s	VGM_WaitComLoop				; loop til done
+		ble.s	.cont					; loop til done
+	WaitYM
 
+.loop
+.check
+		btst	#0,(a4)					; check if Timer A has overflowed
+		beq.s	.check					; if not, wait some more
+
+	YM1	$27, $15					; enable Timer A
+		moveq	#1,d6					; change by 1
+		or.l	d0,d0					; wait so we can safely check the busy flag
+	WaitYM
+		add.b	#$B0,d7					; increment d7		; <- evil evil hack
+		bcc.s	.sub					; if no overflow, set branch
+
+		move.b	#$2A,(a4)				; send DAC command to port1
+		subq.w	#1,d5					; decrease sample index
+		bne.s	.noreset				; branch if more sample to play
+
+		move.w	#$1000,d5				; reset sample lenght
+		lea	VGM_NullPCM(pc),a1			; reset sample address
+
+.noreset
+		moveq	#2,d6					; decrease by 2
+		move.b	(a1)+,1(a4)				; send value to port1
+
+.sub
+		sub.w	d6,d0					; subtract from d0
+		bgt.s	.loop					; if still >0, loop
+
+.cont
 		move.w	d0,d6					; load the remaining amount to d6
 		neg.w	d6					; negative to positive
 		bra.w	VGM_Play				; jump back to playback code
@@ -1201,12 +1195,11 @@ VGM_Data:
 		bne.w	*					; if not, freeze
 
 		move.b	(a0)+,d0				; load the data type to d0
-		beq.s	VGM_DataUncPCM				; uncompressed YM2612 PCM data block
-		bra.w	*					; NOT SUPPORTED
+	;	beq.s	VGM_DataUncPCM				; uncompressed YM2612 PCM data block
+	;	bra.w	*					; NOT SUPPORTED
 ; --------------------------------------------------------------
 
 VGM_DataUncPCM:
-	TimerA							; accumulate TimerA
 		LittleEndianSucks.l	d0			; load the sucky little endian number
 		move.l	a0,a2					; load the new data section
 		lea	(a0,d0.l),a0				; go to the next command address
@@ -1220,10 +1213,9 @@ VGM_DataUncPCM:
 
 VGM_SSF:
 		tst.b	(a0)+					; check for stream 00
-		bne.w	*					; if not, kill
+	;	bne.w	*					; if not, kill
 		LittleEndianSucks.w	d0			; load the sucky little endian number
 
-	TimerA							; accumulate TimerA
 		add.w	d0,d0					;
 		add.w	d0,d0					;
 		add.w	d0,d0					; 8x value
