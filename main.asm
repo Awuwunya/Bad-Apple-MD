@@ -48,8 +48,8 @@ hPAD_Data1:	dc.l PAD_Data1					; PAD 1 data
 
 		dc.b 'SEGA SSF        '
 		dc.b 'AURORA   04-2021'
-		dc.b 'BAD APPLE MD                                    '
-		dc.b 'BAD APPLE MD                                    '
+		dc.b 'BAD APPLE MD                                  v0'
+		dc.b 'BAD APPLE MD                                  v0'
 		dc.b 'AF-BAD-APPLE-0'
 		dc.w 0
 		dc.b 'J               '
@@ -1163,7 +1163,7 @@ VGM_WaitCom:
 		moveq	#1,d6					; change by 1
 		or.l	d0,d0					; wait so we can safely check the busy flag
 	WaitYM
-		add.b	#$B0,d7					; increment d7		; <- evil evil hack
+		add.b	#$C0,d7					; increment d7		; <- evil evil hack
 		bcc.s	.sub					; if no overflow, set branch
 
 		move.b	#$2A,(a4)				; send DAC command to port1
